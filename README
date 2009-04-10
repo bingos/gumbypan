@@ -1,0 +1,17 @@
+GumbyPAN
+========
+
+The freenode #perl CPAN upload announce bot.
+
+Requires:
+
+Email::Simple
+POE
+POE::Component::IRC
+POE::Component::Client::NNTP
+CPAN::DistnameInfo
+
+Copyright (c) 2009 Chris 'BinGOs' Williams
+
+This script may be used, modified, and distributed under the same terms as Perl itself. 
+Please see the license that came with your Perl distribution for details.
