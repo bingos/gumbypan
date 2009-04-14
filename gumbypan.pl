@@ -14,6 +14,7 @@ my $port = 6667;
 
 my %channels = ( 
 		'#perl' => '.*', 
+		'#cpan' => '.*', 
 		);
 
 my $group = 'perl.cpan.uploads';
