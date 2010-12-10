@@ -6,7 +6,7 @@ use POE::Component::IRC::Common qw( :ALL );
 use POE::Component::IRC::Plugin::Connector;
 use POE::Component::IRC::Plugin::CTCP;
 use POE::Component::IRC::Plugin::BotAddressed;
-use POE::Component::Client::NNTP;
+use POE::Component::Client::NNTP::Tail;
 use POE::Component::CPANIDX;
 use CPAN::DistnameInfo;
 use Module::Util qw[is_valid_module_name];
@@ -33,16 +33,22 @@ my %channels = (
 		'#cpan' => '.*', 
 		);
 
-my $group = 'perl.cpan.uploads';
-
 my $irc = POE::Component::IRC->spawn( debug => 0 );
 my $idx = POE::Component::CPANIDX->spawn();
-POE::Component::Client::NNTP->spawn ( 'NNTP-Client', { NNTPServer => 'nntp.perl.org', TimeOut => 60 } );
+
+POE::Component::Client::NNTP::Tail->spawn(
+   NNTPServer  => 'nntp.perl.org',
+   Group       => 'perl.cpan.uploads',
+);
+
+POE::Component::Client::NNTP::Tail->spawn(
+   NNTPServer  => 'nntp.perl.org',
+   Group       => 'perl.modules',
+);
 
 POE::Session->create(
     package_states => [ 
-	'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _nntp_connect _nntp_poll nntp_200 nntp_211 nntp_220 _default _idx) ], 
-	'main' => { nntp_disconnected => '_disconnected', nntp_socketerr    => '_disconnected', },
+	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article) ], 
     ],
     options => { trace => 0 },
 );
@@ -52,8 +58,8 @@ exit 0;
 
 sub _start {
   my ($kernel, $heap, $session) = @_[KERNEL, HEAP, SESSION];
-  $kernel->post ( 'NNTP-Client' => register => 'all' );
-  $kernel->yield( '_nntp_connect' );
+  $kernel->post( 'perl.cpan.uploads', 'register', '_uploads' );
+  $kernel->post( 'perl.modules', 'register', '_modules' );
   $irc->yield( register => 'all' );
   $irc->plugin_add( 'Connector', POE::Component::IRC::Plugin::Connector->new() );
   $irc->plugin_add( 'CTCP', POE::Component::IRC::Plugin::CTCP->new( eat => 0 ) );
@@ -136,49 +142,7 @@ sub _idx {
   return;
 }
 
-sub _nntp_connect {
-  $poe_kernel->post ( 'NNTP-Client' => 'connect' );
-  return;
-}
-
-sub _disconnected {
-  $poe_kernel->delay( _nntp_poll => undef );
-  $poe_kernel->delay( _nntp_connect => 60 );
-  undef;
-}
-
-sub nntp_200 {
-  warn "NNTP_200\n";
-  $poe_kernel->yield( '_nntp_poll' );
-  undef;
-}
-
-sub _nntp_poll {
-  warn "NNTP_POLL\n";
-  $poe_kernel->post ( 'NNTP-Client' => group => $group );
-}
-
-sub nntp_211 {
-  my ($kernel,$self) = @_[KERNEL,HEAP];
-  my ($estimate,$first,$last,$group) = split( /\s+/, $_[ARG0] );
-  warn "NNTP_211\n";
-
-  if ( defined $self->{articles}->{ $group } ) {
-	# Check for new articles
-	if ( $estimate >= $self->{articles}->{ $group } ) {
-	   for my $article ( $self->{articles}->{ $group } .. $estimate ) {
-		$kernel->post ( 'NNTP-Client' => article => $article );
-	   }
-	   $self->{articles}->{ $group } = $estimate + 1;
-	}
-  } else {
-	$self->{articles}->{ $group } = $estimate + 1;
-  }
-  $kernel->delay( '_nntp_poll' => ( $self->{poll} || 60 ) );
-  undef;
-}
-
-sub nntp_220 {
+sub _uploads {
   my ($kernel,$self,$text) = @_[KERNEL,HEAP,ARG0];
   warn "NNTP_220\n";
 
@@ -187,18 +151,40 @@ sub nntp_220 {
   my $subject = $mail->header("Subject");
   return unless $subject;
   if ( $subject =~ /^CPAN Upload: (.+)$/i ) {
-	my $d = CPAN::DistnameInfo->new($1);
-	my $author = $d->cpanid;
-	my $module = $d->distvname;
-	return unless $module;
-	foreach my $channel ( keys %channels ) {
-	   my $regexp = $channels{$channel};
-	   eval { 
+	  my $d = CPAN::DistnameInfo->new($1);
+	  my $author = $d->cpanid;
+	  my $module = $d->distvname;
+	  return unless $module;
+	  foreach my $channel ( keys %channels ) {
+	    my $regexp = $channels{$channel};
+	    eval { 
 	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author" ) if $module =~ /$regexp/;
-	   }
-	}
-	return;
+	    }
+	  }
+	  return;
   }
+  return;
+}
+
+sub _modules {
+  my ($kernel,$id,$lines) = @_[KERNEL,ARG0,ARG1];
+  my $article = Email::Simple->new( join("\r\n", @$lines) );
+  return unless $article->header('Subject') =~ /^Welcome new user/i;
+  $kernel->post( $_[SENDER], 'get_article', $id, '_article' );
+  return;
+}
+
+sub _article {
+  my ($kernel,$id,$lines) = @_[KERNEL,ARG0,ARG1];
+  my $article = Email::Simple->new( join("\r\n", @$lines) );
+  my ($author) = $article->body =~ /Welcome (.*?),/s;
+  my ($cpanid) = $article->body =~ /has a userid for you:\s+(.*?)\s+/s;
+	foreach my $channel ( keys %channels ) {
+	    my $regexp = $channels{$channel};
+	    eval { 
+	      $irc->yield( 'ctcp', $channel, "ACTION welcomes $cpanid - $author to CPAN!" );
+	    }
+	}
   return;
 }
 

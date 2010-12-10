@@ -8,7 +8,7 @@ Requires:
 Email::Simple
 POE
 POE::Component::IRC
-POE::Component::Client::NNTP
+POE::Component::Client::NNTP::Tail
 POE::Component::CPANIDX
 Module::Util
 CPAN::DistnameInfo
