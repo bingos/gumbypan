@@ -10,6 +10,7 @@ use POE::Component::Client::NNTP::Tail;
 use POE::Component::CPANIDX;
 use CPAN::DistnameInfo;
 use Module::Util qw[is_valid_module_name];
+use version;
 
 use constant IDX => 'http://cpanidx.org/cpanidx/';
 
@@ -20,6 +21,7 @@ my $cmds = {
   'timestamp', 0,
   'dists', 1,
   'topten', 0,
+  'corelist' => 1,
 };
 
 my $nickname = 'GumbyPAN';
@@ -28,9 +30,9 @@ my $password = '**********';
 my $server = 'eu.freenode.net';
 my $port = 6667;
 
-my %channels = ( 
-		'#perl' => '.*', 
-		'#cpan' => '.*', 
+my %channels = (
+		'#perl' => '.*',
+		'#cpan' => '.*',
 		);
 
 my $irc = POE::Component::IRC->spawn( debug => 0 );
@@ -47,8 +49,8 @@ POE::Component::Client::NNTP::Tail->spawn(
 );
 
 POE::Session->create(
-    package_states => [ 
-	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article) ], 
+    package_states => [
+	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article) ],
     ],
     options => { trace => 0 },
 );
@@ -90,7 +92,7 @@ sub irc_bot_addressed {
   return unless defined $cmds->{ $cmd };
   my $arg = $cmds->{ $cmd };
   return if $arg and !$search;
-  return if $cmd eq 'mod' and !is_valid_module_name($search);
+  return if $cmd =~ /^(mod|corelist)$/ and !is_valid_module_name($search);
   $idx->query_idx(
         event   => '_idx',
         cmd     => $cmd,
@@ -130,6 +132,11 @@ sub _idx {
           $msg = join ' ', map { ( $_->{cpan_id}, '['.$_->{dists}.']' ) } @{ $res->{data} };
           last SWITCH;
         }
+        if ( $cmd eq 'corelist' ) {
+          my $inf = shift @{ $res->{data} };
+          $msg = join ' ', $search, 'was first released with perl', format_perl_version( $inf->{perl_ver} );
+          last SWITCH;
+        }
      }
   }
   elsif ( $res->{data} and !scalar @{ $res->{data} } ) {
@@ -157,7 +164,7 @@ sub _uploads {
 	  return unless $module;
 	  foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
-	    eval { 
+	    eval {
 	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author" ) if $module =~ /$regexp/;
 	    }
 	  }
@@ -181,7 +188,7 @@ sub _article {
   my ($cpanid) = $article->body =~ /has a userid for you:\s+(.*?)\s+/s;
 	foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
-	    eval { 
+	    eval {
 	      $irc->yield( 'ctcp', $channel, "ACTION welcomes $cpanid - $author to CPAN!" );
 	    }
 	}
@@ -203,4 +210,10 @@ sub _default {
    }
    print join ' ', @output, "\n";
    return 0;
+}
+
+sub format_perl_version {
+    my $v = shift;
+    return $v if $v < 5.006;
+    return version->new($v)->normal;
 }
