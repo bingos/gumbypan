@@ -165,7 +165,7 @@ sub _uploads {
 	  foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
 	    eval {
-	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author" ) if $module =~ /$regexp/;
+	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author (http://metacpan.org/release/$author/$module)" ) if $module =~ /$regexp/;
 	    }
 	  }
 	  return;
