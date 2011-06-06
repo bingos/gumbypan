@@ -14,6 +14,8 @@ use version;
 
 use constant IDX => 'http://cpanidx.org/cpanidx/';
 
+my $repository = 'https://github.com/bingos/gumbypan';
+
 my $cmds = {
   'mod', 1,
   'dist' => 1,
@@ -22,6 +24,17 @@ my $cmds = {
   'dists', 1,
   'topten', 0,
   'corelist' => 1,
+};
+
+my $help = {
+  'mod', 'Look up a module on CPAN',
+  'dist' , 'Look up a distribution on CPAN',
+  'auth', 'Look up a CPANID on CPAN',
+  'timestamp', 'See when the CPANIDX was last updated',
+  'dists', 'See how many dists a CPAN author has',
+  'topten', 'See the CPAN topten',
+  'corelist', 'Check if a CPAN module is included in Perl core',
+  'source', 'A link to the GumbyPAN source code repository',
 };
 
 my $nickname = 'GumbyPAN';
@@ -50,7 +63,7 @@ POE::Component::Client::NNTP::Tail->spawn(
 
 POE::Session->create(
     package_states => [
-	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article) ],
+	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article _help) ],
     ],
     options => { trace => 0 },
 );
@@ -64,7 +77,7 @@ sub _start {
   $kernel->post( 'perl.modules', 'register', '_modules' );
   $irc->yield( register => 'all' );
   $irc->plugin_add( 'Connector', POE::Component::IRC::Plugin::Connector->new() );
-  $irc->plugin_add( 'CTCP', POE::Component::IRC::Plugin::CTCP->new( eat => 0 ) );
+  $irc->plugin_add( 'CTCP', POE::Component::IRC::Plugin::CTCP->new( eat => 0, source => $repository ) );
   $irc->plugin_add( 'Addressed', POE::Component::IRC::Plugin::BotAddressed->new( eat => 0 ) );
   $irc->yield( connect => { Nick => $nickname, Server => $server, Port => $port, Username => $username, Password => $password } );
   return;
@@ -89,6 +102,10 @@ sub irc_bot_addressed {
 
   my ($cmd,$search) = split /\s+/, $what;
   $cmd = lc $cmd;
+  if ( $cmd =~ /^(help|source)$/i ) {
+    $kernel->yield( '_help', $nick, $channel, $cmd, $search );
+    return;
+  }
   return unless defined $cmds->{ $cmd };
   my $arg = $cmds->{ $cmd };
   return if $arg and !$search;
@@ -100,6 +117,21 @@ sub irc_bot_addressed {
         url     => IDX,
         _data   => [ $channel, $nick, $cmd, $search ],
   );
+  return;
+}
+
+sub _help {
+  my ($kernel,$heap,$nick,$channel,$cmd,$search) = @_[KERNEL,HEAP,ARG0..$#_];
+  if ( $cmd eq 'source' ) {
+    $irc->yield( 'privmsg', $channel, "$nick: Source code -> $repository" );
+    return;
+  }
+  if ( $search and my $help = $help->{ lc $search } ) {
+    $irc->yield( 'privmsg', $channel, "$nick: $help" );
+    return;
+  }
+  my $cmds = join ', ', sort keys %{ $help };
+  $irc->yield( 'privmsg', $channel, "$nick: available commands [ " . $cmds . ' ]' );
   return;
 }
 
