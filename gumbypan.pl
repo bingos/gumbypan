@@ -195,6 +195,7 @@ sub _uploads {
 	  my $module = $d->distvname;
 	  return unless $module;
 	  foreach my $channel ( keys %channels ) {
+      next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
 	    my $regexp = $channels{$channel};
 	    eval {
 	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author (http://metacpan.org/release/$author/$module)" ) if $module =~ /$regexp/;
