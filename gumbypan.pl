@@ -198,7 +198,7 @@ sub _uploads {
       next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
 	    my $regexp = $channels{$channel};
 	    eval {
-	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author (http://metacpan.org/release/$author/$module)" ) if $module =~ /$regexp/;
+	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by ${author}++ (http://metacpan.org/release/$author/$module)" ) if $module =~ /$regexp/;
 	    }
 	  }
 	  return;
