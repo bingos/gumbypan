@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Email::Simple;
+use POE::Kernel { loop => 'POE::XS::Loop::EPoll' };
 use POE qw(Component::IRC);
 use POE::Component::IRC::Common qw( :ALL );
 use POE::Component::IRC::Plugin::Connector;
@@ -11,6 +12,10 @@ use POE::Component::CPANIDX;
 use CPAN::DistnameInfo;
 use Module::Util qw[is_valid_module_name];
 use version;
+
+$|=1;
+
+our $VERSION = '0.666';
 
 use constant IDX => 'http://cpanidx.org/cpanidx/';
 
@@ -35,12 +40,13 @@ my $help = {
   'topten', 'See the CPAN topten',
   'corelist', 'Check if a CPAN module is included in Perl core',
   'source', 'A link to the GumbyPAN source code repository',
+  'version', 'What version of gumbypan this is',
 };
 
 my $nickname = 'GumbyPAN';
 my $username = 'cpanbot';
 my $password = '**********';
-my $server = 'eu.freenode.net';
+my $server = 'chat.freenode.net';
 my $port = 6667;
 
 my %channels = (
@@ -48,22 +54,24 @@ my %channels = (
 		'#cpan' => '.*',
 		);
 
-my $irc = POE::Component::IRC->spawn( debug => 0 );
+my $irc = POE::Component::IRC->spawn( debug => 0, useipv6 => 1, );
 my $idx = POE::Component::CPANIDX->spawn();
 
 POE::Component::Client::NNTP::Tail->spawn(
    NNTPServer  => 'nntp.perl.org',
    Group       => 'perl.cpan.uploads',
+   Debug       => 1,
 );
 
 POE::Component::Client::NNTP::Tail->spawn(
    NNTPServer  => 'nntp.perl.org',
    Group       => 'perl.modules',
+   Debug       => 1,
 );
 
 POE::Session->create(
     package_states => [
-	    'main' => [ qw(_start irc_001 irc_join irc_bot_addressed _default _idx _uploads _modules _article _help) ],
+	    'main' => [ qw(_start irc_001 irc_480 irc_join irc_bot_addressed _default _idx _uploads _modules _article _help) ],
     ],
     options => { trace => 0 },
 );
@@ -76,7 +84,7 @@ sub _start {
   $kernel->post( 'perl.cpan.uploads', 'register', '_uploads' );
   $kernel->post( 'perl.modules', 'register', '_modules' );
   $irc->yield( register => 'all' );
-  $irc->plugin_add( 'Connector', POE::Component::IRC::Plugin::Connector->new() );
+  $irc->plugin_add( 'Connector', POE::Component::IRC::Plugin::Connector->new( reconnect => 10 ) );
   $irc->plugin_add( 'CTCP', POE::Component::IRC::Plugin::CTCP->new( eat => 0, source => $repository ) );
   $irc->plugin_add( 'Addressed', POE::Component::IRC::Plugin::BotAddressed->new( eat => 0 ) );
   $irc->yield( connect => { Nick => $nickname, Server => $server, Port => $port, Username => $username, Password => $password } );
@@ -85,6 +93,13 @@ sub _start {
 
 sub irc_001 {
   $irc->yield( 'join', $_ ) for keys %channels;
+  return;
+}
+
+sub irc_480 {
+  my ($kernel,$heap) = @_[KERNEL, HEAP];
+  my $channel = $_[ARG2]->[0];
+  $irc->delay( [ join => $channel ], 60 );
   return;
 }
 
@@ -102,7 +117,7 @@ sub irc_bot_addressed {
 
   my ($cmd,$search) = split /\s+/, $what;
   $cmd = lc $cmd;
-  if ( $cmd =~ /^(help|source)$/i ) {
+  if ( $cmd =~ /^(help|source|version)$/i ) {
     $kernel->yield( '_help', $nick, $channel, $cmd, $search );
     return;
   }
@@ -124,6 +139,10 @@ sub _help {
   my ($kernel,$heap,$nick,$channel,$cmd,$search) = @_[KERNEL,HEAP,ARG0..$#_];
   if ( $cmd eq 'source' ) {
     $irc->yield( 'privmsg', $channel, "$nick: Source code -> $repository" );
+    return;
+  }
+  if ( $cmd eq 'version' ) {
+    $irc->yield( 'privmsg', $channel, "$nick: Version $VERSION running on Perl " . format_perl_version( $] ) );
     return;
   }
   if ( $search and my $help = $help->{ lc $search } ) {
@@ -195,10 +214,11 @@ sub _uploads {
 	  my $module = $d->distvname;
 	  return unless $module;
 	  foreach my $channel ( keys %channels ) {
-      next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
 	    my $regexp = $channels{$channel};
+      next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
+      next if $channel eq '#perl' and $author eq 'PETAMEM' and $module =~ /^Lingua\-/;
 	    eval {
-	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author (http://metacpan.org/release/$author/$module)" ) if $module =~ /$regexp/;
+	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author http://metacpan.org/release/$author/$module" ) if $module =~ /$regexp/;
 	    }
 	  }
 	  return;
