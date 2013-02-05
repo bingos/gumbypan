@@ -13,7 +13,7 @@ POE::Component::CPANIDX
 Module::Util
 CPAN::DistnameInfo
 
-Copyright (c) 2010 Chris 'BinGOs' Williams
+Copyright (c) 2013 Chris 'BinGOs' Williams
 
 This script may be used, modified, and distributed under the same terms as Perl itself. 
 Please see the license that came with your Perl distribution for details.
