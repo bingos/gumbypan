@@ -219,7 +219,7 @@ sub _uploads {
       next if $channel eq '#perl' and $author eq 'PETAMEM' and $module =~ /^Lingua\-/;
       next if $channel eq '#perl' and $module =~ /^Task-Kensho-\D/;
 	    eval {
-	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author http://metacpan.org/release/$author/$module" ) if $module =~ /$regexp/;
+	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author https://metacpan.org/release/$author/$module" ) if $module =~ /$regexp/;
 	    }
 	  }
 	  return;
