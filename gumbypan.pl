@@ -215,6 +215,7 @@ sub _uploads {
 	  return unless $module;
 	  foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
+      next if $author  eq 'PSIXDISTS';
       next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
       next if $channel eq '#perl' and $author eq 'PETAMEM' and $module =~ /^Lingua\-/;
       next if $channel eq '#perl' and $module =~ /^Task-Kensho-\D/;
