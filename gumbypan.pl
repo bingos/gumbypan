@@ -212,13 +212,22 @@ sub _uploads {
 	  my $d = CPAN::DistnameInfo->new($1);
 	  my $author = $d->cpanid;
 	  my $module = $d->distvname;
+    my $filename = $d->filename;
 	  return unless $module;
 	  foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
-      next if $author  eq 'PSIXDISTS';
+      next if $author  eq 'PSIXDISTS'; # throw it away, throw it away now
+      next if $filename =~ /^Perl6\//i;
+      next if $channel eq '#perl' and $author eq 'JGNI';
+      next if $channel eq '#perl' and $author eq 'DOCRIVERS';
+      next if $channel eq '#perl' and $author eq 'ULTRAHD';
+      next if $channel eq '#perl' and $author eq 'OPENLOAD';
+      next if $channel eq '#perl' and $author eq 'PERLANCAR';
+      next if $channel eq '#perl' and $author =~ m!^FULLU?H[DQ]$!i;
       next if $channel eq '#perl' and $author eq 'INA' and $module =~ /^Char\-/;
       next if $channel eq '#perl' and $author eq 'PETAMEM' and $module =~ /^Lingua\-/;
-      next if $channel eq '#perl' and $module =~ /^Task-Kensho-\D/;
+      next if $channel eq '#perl' and $module =~ /^Task\-Kensho\-/;
+      next if $channel eq '#perl' and $module =~ /^Acme-MyFirstModule-/i;
 	    eval {
 	      $irc->yield( 'ctcp', $channel, "ACTION CPAN Upload: $module by $author https://metacpan.org/release/$author/$module" ) if $module =~ /$regexp/;
 	    }
