@@ -217,7 +217,7 @@ sub _uploads {
 	  foreach my $channel ( keys %channels ) {
 	    my $regexp = $channels{$channel};
       next if $author  eq 'PSIXDISTS'; # throw it away, throw it away now
-      next if $filename =~ /^Perl6\//i;
+      next if $filename =~ /^(?:Perl6|Raku)\//i;
       next if $channel eq '#perl' and $author eq 'JGNI';
       next if $channel eq '#perl' and $author eq 'DOCRIVERS';
       next if $channel eq '#perl' and $author eq 'ULTRAHD';
