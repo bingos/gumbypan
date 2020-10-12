@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Email::Simple;
+use Email::MIME;
 use POE::Kernel { loop => 'POE::XS::Loop::EPoll' };
 use POE qw(Component::IRC);
 use POE::Component::IRC::Common qw( :ALL );
@@ -247,7 +248,7 @@ sub _modules {
 
 sub _article {
   my ($kernel,$id,$lines) = @_[KERNEL,ARG0,ARG1];
-  my $article = Email::Simple->new( join("\r\n", @$lines) );
+  my $article = Email::MIME->new( join("\r\n", @$lines) );
   my ($author) = $article->body =~ /Welcome (.*?),/s;
   my ($cpanid) = $article->body =~ /has a userid for you:\s+(.*?)\s+/s;
 	foreach my $channel ( keys %channels ) {
